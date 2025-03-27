@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -32,7 +33,6 @@ class SleepService : Service(), SensorEventListener {
     private val channelId = "BatteryServiceChannel"
 
     private lateinit var wakeLock: PowerManager.WakeLock
-    // Adicione esta variável para inicializar o QueueManager
     private lateinit var queueManager: QueueManager
 
     // Sensor Manager e Sensores
@@ -54,6 +54,8 @@ class SleepService : Service(), SensorEventListener {
     private var hasGeneratedCSV = false
 
     private var currentStatusValue = "awake"
+
+    private var isHandlerRunning = false
 
     override fun onCreate() {
         super.onCreate()
@@ -117,33 +119,42 @@ class SleepService : Service(), SensorEventListener {
 
         startForeground(1, notification) // Mantém o serviço em execução em primeiro plano
 
-        runnable = Runnable {
-            try {
-                collectSleepData()
-                val dbGet = "/data/data/com.example.sleepmonitorapp/databases/sleep_data.db"
-                var rowCount = dbHelper.countRowsInTable(dbGet)
-                Log.d("SleepService", "Quantidade de dados: $rowCount")
+        if (!isHandlerRunning) {
+            isHandlerRunning = true
+            runnable = Runnable {
+                try {
+                    val startTime = System.currentTimeMillis()
 
-                if (rowCount >= 1440 && !hasGeneratedCSV) {
-                    if (generateCSV()) {
-                        resetDatabase()
+                    // Coleta os dados
+                    collectSleepData()
+
+                    val dbGet = "/data/data/com.example.sleepmonitorapp/databases/sleep_data.db"
+                    val rowCount = dbHelper.countRowsInTable(dbGet)
+                    Log.d("SleepService", "Quantidade de dados: $rowCount")
+
+                    if (rowCount >= 1440 && !hasGeneratedCSV) {
+                        if (generateCSV()) {
+                            resetDatabase()
+                        }
                     }
+
+                    val nextExecutionTime = startTime + 60000
+                    val delay = nextExecutionTime - System.currentTimeMillis()
+                    //SystemClock.uptimeMillis()
+
+                    handler.postDelayed(runnable!!, delay)
+                } catch (e: Exception) {
+                    Log.e("SleepService", "Erro durante a coleta de dados: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e("SleepService", "Erro durante a coleta de dados: ${e.message}")
             }
-
-            handler.postDelayed(runnable!!, 60000)
+            handler.post(runnable!!)
         }
-
-        handler.post(runnable!!)
 
         return START_STICKY
     }
 
     private fun generateCSV(): Boolean {
-        // Lógica para gerar o CSV a partir dos dados do banco
-        val dataList = dbHelper.getAllSleepData()  // Função que retorna a lista de dados
+        val dataList = dbHelper.getAllSleepData()
         val file = File(getCSVFilePath())
 
         try {
@@ -155,7 +166,7 @@ class SleepService : Service(), SensorEventListener {
             writer.close()
             Log.d("SleepService", "Arquivo CSV criado com sucesso em: ${file.absolutePath}")
 
-            // Marca que o CSV foi gerado
+            // Marca que o CSV foi gerado%$
             hasGeneratedCSV = true
             return true
         } catch (e: Exception) {
@@ -175,13 +186,11 @@ class SleepService : Service(), SensorEventListener {
     }
 
     private fun getCSVFilePath(): String {
-        // Caminho para salvar o CSV (ajuste conforme sua necessidade)
         val documentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "SleepData")
         if (!documentsDir.exists()) {
             documentsDir.mkdirs()
         }
 
-        // Nome base do arquivo com data e hora
         val baseFileName = "sleep_data_${SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())}.csv"
 
         // Caminho completo para o arquivo
@@ -189,7 +198,6 @@ class SleepService : Service(), SensorEventListener {
         var fileName = baseFileName
         var count = 1
 
-        // Verifique se o arquivo já existe e crie um nome único
         while (file.exists()) {
             fileName = "sleep_data_${SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())}_($count).csv"
             file = File(documentsDir, fileName)
@@ -204,6 +212,7 @@ class SleepService : Service(), SensorEventListener {
         super.onDestroy()
         Log.d("SleepService", "Serviço destruído")
         handler.removeCallbacks(runnable!!)
+        isHandlerRunning = false
         if (wakeLock.isHeld) {
             wakeLock.release() // Liberte o WakeLock quando o serviço for destruído
         }
@@ -266,6 +275,6 @@ class SleepService : Service(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Trate as mudanças de precisão se necessário
+        //
     }
 }
