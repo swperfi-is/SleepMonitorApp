@@ -56,12 +56,12 @@ class SleepJobService : JobService(), SensorEventListener {
             }
         }
 
-        return false // Indica que o job foi concluído
+        return false 
     }
 
     override fun onStopJob(params: JobParameters?): Boolean {
         stopSensorsMonitoring()
-        return true // Permite reexecutar caso seja interrompido
+        return true 
     }
 
     private fun initializeSensors() {
@@ -103,7 +103,7 @@ class SleepJobService : JobService(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Trate mudanças de precisão se necessário
+        
     }
 
     private fun collectSleepData() {
@@ -124,7 +124,7 @@ class SleepJobService : JobService(), SensorEventListener {
             gyroxValue,
             gyroyValue,
             gyrozValue,
-            "awake" // Aqui você pode pegar o status real do seu app
+            "awake" 
         )
 
         val queueManager = QueueManager(this)
